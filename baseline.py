@@ -34,6 +34,22 @@ class CNN(nn.Module):
     def pred(self, x):
         return self.forward(x)
 
+def calc_acc(dl, model, device):
+    model.eval()
+    with torch.no_grad():
+        correct = 0
+        total = 0
+        for (X, y) in dl:
+            X, y = X.to(device), y.to(device)
+            pred = model.pred(X)
+            outputs = torch.argmax(pred, dim=1)
+            correct += (outputs == y).sum().item()
+            total += y.size(0)
+        acc = correct/total
+    return acc
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 transform = transforms.ToTensor()
 dataset = datasets.FashionMNIST(root="data", train=True, download=True, transform=transform)
 
@@ -44,10 +60,10 @@ trainset, testset, valset = random_split(dataset, lengths)
 train_dl = DataLoader(trainset, batch_size=64, shuffle=True)
 val_dl = DataLoader(valset, batch_size=64)
 
-model = CNN()
+model = CNN().to(device)
 
-lr = 0.01
-epochs = 15
+lr = 0.005
+epochs = 10
 optimizer = torch.optim.SGD(model.parameters(), lr=lr)
 loss_fn = nn.CrossEntropyLoss()
 
@@ -60,6 +76,7 @@ for epoch in range(epochs):
 
     model.train()
     for (X, y) in train_dl:
+        X, y = X.to(device), y.to(device)
         optimizer.zero_grad()
         pred = model(X)
         loss = loss_fn(pred, y)
@@ -69,25 +86,8 @@ for epoch in range(epochs):
         running_loss+=loss.item()
     
     # Evaluation Metrics
-    model.eval()
-    with torch.no_grad():
-        correct = 0
-        total = 0
-        for (X, y) in train_dl:
-            pred = model.pred(X)
-            outputs = torch.argmax(pred, dim=1)
-            correct += (outputs == y).sum().item()
-            total += y.size(0)
-        train_acc = correct/total
-
-        correct = 0
-        total = 0
-        for (X, y) in val_dl:
-            pred = model.pred(X)
-            outputs = torch.argmax(pred, dim=1)
-            correct += (outputs == y).sum().item()
-            total += y.size(0)
-        val_acc = correct/total
+    train_acc = calc_acc(train_dl, model, device)
+    val_acc = calc_acc(val_dl, model, device)
         
     print(f"Epoch {epoch+1}: Loss {running_loss/batches}")
     print(f"Train Accuracy: {train_acc:.4f} Validation Accuracy: {val_acc:.4f}")
